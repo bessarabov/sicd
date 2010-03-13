@@ -1,0 +1,77 @@
+#! /usr/bin/perl
+
+# Переменная флаг - нужно ли продолжать либо остановка
+# 1 - стоп
+# 0 - продолжить выполнение
+my $stopped = 0;
+
+#Понимаю, где я нахожусь и преключаюсь на транк (т.е. убираю branches/NNN из текущего пути)
+$result = `svn info|grep "URL:"`;
+chomp ($result);
+$result =~ /URL: (.*)branches\/(\d*)$/;
+
+unless ($result) {
+    die "Ошибка: нет данных о номере ветки\n";
+}
+
+# Переменная с путем ветки, где я работаю
+my $branch = "$1" . "branches/" .  "$2";
+# Переменная с путем транка
+my $trunk = "$1" . "trunk";
+# Переменная с номером тикета
+my $ticket = $2;
+
+execute_command("svn sw $trunk");
+
+# В эти переменные запихну минимальный и максимальный номер правки в ветке
+my $rmin = 10000000;
+my $rmax = 0;
+
+$result = `svn log --stop-on-copy --xml $branch`;
+foreach (split(/\n/,$result)) {
+    if ($_ =~ /revision="(\d*)"/) {
+        if ($1>$rmax) { $rmax=$1; }
+        if ($1<$rmin) { $rmin=$1; }
+    }
+}
+
+execute_command("svn merge --dry-run -r$rmin:$rmax $branch");
+
+print "merge? [y/N] ";
+my $input = <>;
+chomp($input);
+if ( lc($input) ne "y") { $stopped=1; print "stopping\n";} 
+
+execute_command("svn merge -r$rmin:$rmax $branch");
+
+unless ($stopped) {
+    print "commit? [y/N] ";
+    my $input = <>;
+    chomp($input);
+    if ( lc($input) ne "y") { $stopped=1; print "stopping\n";} 
+}
+
+execute_command("svn ci -m 'Вливаю изменения -r$rmin:$rmax ветки $ticket в транк. See #$ticket.'");
+
+execute_command("svn rm $branch -m 'Изменения в ветки слиты с транком. Ветку удаляю. Closes #$ticket.'");
+
+if ($stopped) {
+    # В том случае, если идет остановка, записываю в конец файла пустую строку
+    open (MYFILE, '>>sicd.txt');
+    print MYFILE "\n";
+}
+
+sub execute_command {
+    my $command = shift;
+
+    if ($stopped) {
+        # в том случае, если нужно остановится, то записываю комманду в файл
+        open (MYFILE, '>>sicd.txt');
+        print MYFILE "\$ $command\n";
+    } else {
+        # в том же случае, если останавливатся не нужно, то выполняю комманду
+        print "\$ $command\n";
+        my $result = `$command`;
+        print $result;
+    }
+}

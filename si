@@ -1,0 +1,52 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+# Проверяю входные параметры
+unless ($ARGV[0]) { 
+    die "Ошибка: не указана ветка\n";
+}
+
+unless ($ARGV[0]=~/^\d+$/) {
+    die "Ошибка: номер ветки должен быть числом\n";
+}
+
+# Переменная в которую я соберу путь к репозиторию
+my $rep_path;
+
+# Понимаю, где я нахожусь
+$rep_path = `svn info|grep "URL:"`;
+chomp ($rep_path);
+
+# Я должен находится в рабочей копии, примем либо в транке, либо в ветке
+$rep_path =~ s/(trunk|branches\/\d*)$//;
+unless ($1) {
+    die "Ошибка: текущий путь не рабочая копия тракани и не ветки\n"; 
+}
+
+# Удаляю текст перед путем
+$rep_path =~ s/^URL: //;
+
+# Переменная с путем транка
+my $trunk = $rep_path . "trunk";
+
+# Переменная с номером тикета
+my $ticket = $rep_path . "branches/" . $ARGV[0];
+
+# Переменная в которую я буду сохранять вывод
+my $result;
+
+# Создаю ветку с именем номера тикета. В комменатрий пишу "Создаю ветку для работы над тикетом. See #ticket_number."
+execute_command(qq{svn cp $trunk $ticket -m "Создаю ветку для работы над тикетом. See #$ARGV[0]."});
+
+# Переключаюсь на ветку 
+execute_command(qq{svn sw $ticket});
+
+sub execute_command {
+    my $command = shift;
+    print "\$ $command\n";
+    my $result = `$command`;
+    print $result;
+}
+

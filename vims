@@ -1,0 +1,1 @@
+vim `svn st|grep "^M"|sed 's/^.* //'|tr "\n" " "`
